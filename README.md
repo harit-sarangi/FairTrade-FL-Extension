@@ -65,7 +65,7 @@ To execute the baseline training pipeline for 50 communication rounds over 3 cli
 ```bash
 python3 FairTrade_pre_changes.py --fairness_notion 'stat_parity' --num_clients 3 --dataset_name 'adult' --epochs 15 --communication_rounds 50 --mobo_optimization_rounds 10 --distribution_type 'random'
 ```
-Note: The FairTrade.py was modified for the tasks as part of the challenge - The FairTrade file in the repo will execute Task 3 out of the box. if you wish to refer the original FairTrade file, please refer FairTrade_pre_changes.py - Running this will give you the ValueError: too many values to unpack (expected 6) as Python expects get_data() to return an iterable containing exactly 6 elements. If get_data() returns 7 or more elements (for example, the modified version of a function returning more details), it raises this exception because it doesn't know where to put the leftover values. Therefore recommend you to run FairTrade.py
+Note: The FairTrade.py was modified for the tasks as part of the challenge - The FairTrade file in the repo will execute Task 3 out of the box. if you wish to refer the original FairTrade file, please refer FairTrade_pre_changes.py - Running this will give you the ValueError: too many values to unpack (expected 6) as Python expects get_data() to return an iterable containing exactly 6 elements. If get_data() returns 7 or more elements (for example, the modified version of a function returning more details), it raises this exception because it doesn't know where to put the leftover values. This is to show Bug A from the report. Therefore recommend you to run FairTrade.py
 ### Task 2: Executing the Intersectional Evaluation
 To audit single-attribute vs. intersectional demographic biases:
 ```bash
