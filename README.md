@@ -1,55 +1,82 @@
 # FairTrade: Achieving Pareto-Optimal Trade-offs Between Balanced Accuracy and Fairness in Federated Learning
-As Federated Learning (FL) gains prominence in distributed machine learning applications, achieving fairness without compromising predictive performance becomes paramount. The data being gathered from distributed clients in an FL environment often leads to class imbalance. In such scenarios, balanced accuracy rather than accuracy is the true representation of model performance. However, most state-of-the-art fair FL methods report accuracy as the measure of performance,  which can lead to misguided interpretations of the model's effectiveness to mitigate discrimination. To the best of our knowledge, this work presents the first attempt towards achieving Pareto-optimal trade-offs between balanced accuracy and fairness in a federated environment (FairTrade). By utilizing multi-objective optimization, the framework negotiates the intricate balance between model's balanced accuracy and fairness. The framework's agnostic design adeptly accommodates both statistical and causal fairness notions, ensuring its adaptability across diverse FL contexts. We provide empirical evidence of our novel framework's efficacy through extensive experiments on five real-world datasets and comparisons with six competing baselines. The empirical results underscore the significant potential of our framework in improving the trade-off between fairness and balanced accuracy in FL applications.
-## The datsets used in this project
-* [Adult Census](https://archive.ics.uci.edu/dataset/2/adult)
-* [Bank Marketing](https://archive.ics.uci.edu/dataset/222/bank+marketing)
-* [Default](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients)
-* [Law School](https://github.com/iosifidisvasileios/FABBOO/blob/master/Data/law_dataset.arff)
-## Code
-### Dataset Processing Scripts
 
-The `datasets` directory contains all the datasets used in this project. Below is a description of python scripts written to process datasets:
+This repository is an extended, fully debugged fork of the **FairTrade** framework published in the *Proceedings of the 38th AAAI Conference on Artificial Intelligence (AAAI-24)*. 
 
-- `load_data_utilities.py`: Utility script for loading and preprocessing all the datasets (Adult, Bank, Default, Law).
+As Federated Learning (FL) environments inherently suffer from class imbalances and statistical heterogeneity across distributed clients, optimizing for standard accuracy can yield misleading fairness evaluations. FairTrade is a multi-objective optimization (MOO) framework leveraging Multi-Objective Bayesian Optimization (MOBO) via BoTorch to dynamically negotiate Pareto-optimal trade-offs between **balanced accuracy** and **fairness**.
 
-### Utility Scripts
-- `utilities.py`: Utility script for computing evaluation metrics including 'statistical parity', average treatment effect (ATE), balanced accuracy, and accuracy.
+---
 
-### FairTrade main scripts
-The following scripts constitute the complete methodology of FairTrade
-- `Fairtrade-crypten.py`: Main script for the 'FairTrade' framework that orchestrates the fairness aware federated learning process on different datasets with secure multiparty protocol.
-- `Fairtrade.py`: Main script for the 'FairTrade' framework that orchestrates the fairness aware federated learning process on different datasets without secure multiparty protocol.
+## Summary of Key Changes & Modifications
 
-- `constraint.py`: The script contains the implementation of fairness constraints for discrimination mitigation.
-  
-## Running the FairTrade-crypten.py Script
+This fork introduces crucial framework fixes, extends the evaluation pipeline, and incorporates joint multi-attribute optimization support:
 
-To run the `FairTrade-crypten.py` script with the default settings, you can use the following command:
+### 1. Framework Bug Fixes (Task 4)
+* **Resolved Loop Assignment Crash (Bug A):** Fixed a fatal `ValueError: not enough values to unpack (expected 3, got 1)` in `FairTrade.py` (and `FairTrade-crypten.py`) where the training loop tried to unpack a single 2-element objective tensor into three variables.
+* **Fixed Non-existent Causal Class Call (Bug B):** Patched a major `NameError` in `constraint.py` where the constructor and forward passes of `AverageTreatmentEffectLoss` attempted to invoke `super(EqualOpportunityLoss, self)` instead of targeting its actual class space.
 
-```bash
-python FairTrade-crypten.py --fairness_notion 'stat_parity' --num_clients 3 --dataset_name 'bank' --epochs 15 --communication_rounds 50 --mobo_optimization_rounds 10 --distribution_type 'random'
+### 2. Intersectional Audit Module (Task 2)
+* Added a standalone pipeline (`evaluate_intersection.py`) to systematically audit compound, multi-dimensional bias. It computes selection rates and Statistical Parity Differences (SPD) across both isolated individual features (gender, race) and their respective intersectional subgroups (e.g., White Males, Non-White Females).
+
+### 3. Minimax Joint Multi-Attribute Fair FL (Task 3)
+* Extended the core learning pipeline to optimize jointly for **gender** and **race**. 
+* Designed a **Minimax (Max-SPD)** formulation to preserve the efficiency of the 2D BoTorch hypervolume Pareto search:
+  $$\min_{\theta} \quad \mathcal{F}(\theta) = \max \left( \left\vert{}\text{SPD}_{\text{gender}}(\theta)\right\vert{}, \left\vert{}\text{SPD}_{\text{race}}(\theta)\right\vert{} \right)$$
+* Updated \texttt{load\_data\_utilities.py}, \texttt{constraint.py}, and \texttt{FairTrade.py} to extract both protected features, compute concurrent constraint violations, and dynamically backpropagate the worst-case demographic bottleneck.
+
+---
+
+## Repository File Structure
+
+```text
+FairTrade/
+│
+├── datasets/                 # Preprocessed and raw datasets (Adult, Bank, etc.)
+│── FairTrade_pre_changes.py  # Original codebase entry point for referring code pre task changes/BO orchestration pipeline
+├── constraint.py             # Fairness constraints (updated for ATE fix & joint Minimax loss)
+├── load_data_utilities.py    # Preprocessing utilities (updated for dual sex/race extraction)
+├── evaluate_intersection.py  # Standalone intersectional bias evaluation script
+├── FairTrade.py              # Main training/BO orchestration pipeline
+├── FairTrade-crypten.py      # Secure MPC training pipeline
+│
+├── requirements.txt          # Replicated python virtual environment freeze
+└── README.md                 # Project documentation & execution guide
 ```
-## Running the FairTrade.py Script
-To run the `FairTrade.py` script with the default settings, you can use the following command:
 
+## Environment Setup & Prerequisites
+All scripts were verified using Python 3.13. To configure your environment and guarantee exact metric reproducibility:
+
+# Create and activate your virtual environment
 ```bash
-python FairTrade.py --fairness_notion 'stat_parity' --num_clients 3 --dataset_name 'bank' --epochs 15 --communication_rounds 50 --mobo_optimization_rounds 10 --distribution_type 'random'
+python3 -m venv fair_env
+source fair_env/bin/activate
+
+# Install pinned system dependencies
+pip install -r requirements.txt
+
+# Create the results directory to store generated .npy files before executing the code
+mkdir -p results/adult
 ```
-## Prerequisites
 
-Before running the script, ensure you have the following Python libraries installed:
+## Execution Commands
+To ensure total experimental reproducibility across client allocations, running any script automatically initializes a deterministic random seed (seed=45).
 
-- torch==2.0.1
-- torchvision==0.15.2
-- scikit-learn==0.24.2
-- pandas==1.5.3
-- gpytorch==1.10
-- botorch==0.8.5
-- crypten==0.4.1
-- cvxopt==1.3.1
-- cvxpy==1.3.2
-
-## Citation Request
+### Task 1: Replicating Baseline Demographic Parity (Adult R3C)
+To execute the baseline training pipeline for 50 communication rounds over 3 clients with random partitioning:
+```bash
+python3 FairTrade_pre_changes.py --fairness_notion 'stat_parity' --num_clients 3 --dataset_name 'adult' --epochs 15 --communication_rounds 50 --mobo_optimization_rounds 10 --distribution_type 'random'
+```
+Note: The FairTrade.py was modified for the tasks as part of the challenge - The FairTrade file in the repo will execute Task 3 out of the box. if you wish to refer the original FairTrade file, please refer FairTrade_pre_changes.py
+### Task 2: Executing the Intersectional Evaluation
+To audit single-attribute vs. intersectional demographic biases:
+```bash
+python3 evaluate_intersection.py
+```
+### Task 3: Joint Fairness Optimization Run (Minimax Max-SPD)
+To run our joint-attribute optimization model (optimizing gender and race parity metrics concurrently):
+```bash
+python3 FairTrade.py --fairness_notion 'stat_parity' --num_clients 3 --dataset_name 'adult' --epochs 15 --communication_rounds 50 --mobo_optimization_rounds 10 --distribution_type 'random'
+```
+## References
 If you find this work useful in your research, please consider citing:
 ```bash
 @inproceedings{badar2024fairtrade,
@@ -58,4 +85,22 @@ If you find this work useful in your research, please consider citing:
   booktitle={Proceedings of the 38th Annual AAAI Conference on Artificial Intelligence},
   year={2024}
 }
+@inproceedings{agarwal2018,
+  title={A reductions approach to fair classification},
+  author={Agarwal, Alekh and Beygelzimer, Alina and Dud{\'\i}k, Miroslav and Langford, John and Wallach, Hanna},
+  booktitle={International Conference on Machine Learning},
+  pages={60--69},
+  year={2018},
+  organization={PMLR}
+}
+@inproceedings{verma2018,
+  title={Fairness definitions explained},
+  author={Verma, Sahil and Rubin, Julia},
+  booktitle={2018 IEEE/ACM international workshop on software fairness (FairWare)},
+  pages={1--7},
+  year={2018},
+  organization={IEEE}
+}
 ```
+### AI usage acknowledgment:
+Google Gemini (2026) assisted in code analysis, debugging framework runtime crashes, optimization loss formulation verification, and documentation structure optimization.

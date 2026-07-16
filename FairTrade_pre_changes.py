@@ -1,3 +1,4 @@
+
 import torch
 import math
 import argparse
@@ -45,7 +46,7 @@ from botorch.utils.multi_objective.box_decompositions.non_dominated import (
 )
 # Initialize the argument parser
 parser = argparse.ArgumentParser(description="pass the following arguments: dataset_name, number of clients, fairness notion, number of communication rounds.")
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('mps')
 '''
 #logistic regression model
 def create_model(input_dim):
@@ -130,14 +131,7 @@ else:
 
 bal_acc_list = []
 fairness_notion_list = []
-# TASK 3 Changes: UNPACK MULTI-SENSITIVE GLOBAL ATTRIBUTES
-# Extracted both sex_list and race_list during global dataset unpacking to 
-# evaluate independent and joint fairness objectives.
-# Old: clients_data,X_test, y_test, sex_list, column_names_list, ytest_potential = load_dataset()
-# New: Unpack both sex_list and race_list, and use race_list for evaluating the intersection
-clients_data, X_test, y_test, sex_list, race_list, column_names_list, ytest_potential = load_dataset(
-    url, dataset_name, num_clients, sensitive_feature, distribution_type
-)
+clients_data,X_test, y_test, sex_list, column_names_list, ytest_potential = load_dataset(url,dataset_name, num_clients, sensitive_feature,distribution_type)
 X_test = X_test.to(device)
 y_test = y_test.to(device)
 global_model = create_model(X_test.shape[1])
@@ -172,16 +166,11 @@ def evaluate(alpha = 100, lr=0.001, cost_false_negatives=5):
     params = [torch.zeros_like(param.data) for param in global_model.parameters()]
     for client_name in clients_data.keys():
         print(client_name)
-        
-        # TASK 3 Changes: MULTI-ATTRIBUTE CLIENT EXTRACTION
-        # Unpack both local client sensitive attributes and send to devices.
-        # Unpack both sex (gender) and race sensitive attributes
-        X1, y1, s_gender, s_race, y1_potential = get_data(client_name, clients_data)
+        X1,y1,s1,y1_potential = get_data(client_name, clients_data)
         X1 = X1.to(device)
         y1 = y1.to(device)
         y1_potential = y1_potential.to(device)
-        s_gender = s_gender.to(device)
-        s_race = s_race.to(device)
+        s1 = s1.to(device)
         model1 = create_model(X1.shape[1])
         model1 = model1.to(device)
         model1.load_state_dict(global_model.state_dict())
@@ -200,11 +189,7 @@ def evaluate(alpha = 100, lr=0.001, cost_false_negatives=5):
             X1_cpu = X1.cpu()
             X1_dataframe = pd.DataFrame(X1_cpu.numpy(), columns=column_names_list)
             y_pred_numpy = y_pred.clone().cpu()
-            # TASK 3 Changes: WORST-OFF ATTRIBUTE OPTIMIZATION
-            # Compute demographic loss under a minimax setup using both gender and race.
-            # Forward both sensitive features into minimax loss computation
-            
-            fairness_loss = dp_loss(X1, y_pred, s_gender, s_race, y1_potential)
+            fairness_loss = dp_loss(X1, y_pred, s1,y1_potential)
             fairness_loss = fairness_loss.to(device)
             loss = criterion(y_pred.view(-1), y1) + fairness_loss
             loss.backward()
@@ -228,17 +213,7 @@ def evaluate(alpha = 100, lr=0.001, cost_false_negatives=5):
         y_pred = global_model(X_test).squeeze()
         y_pred_cls = y_pred.round()
         sensitivity,specificity,bal_acc,G_mean,FN_rate,FP_rate,Precision,f1_sc, acc, auc = all_metrics(y_test.cpu(),y_pred.cpu())
-        # Calculate independent SPDs for both features globally
-        
-        # TASK 3 Changes: GLOBAL MINIMAX OBJECTIVE SCORE
-        # Calculate individual global SPDs, extract the worst-performing attribute 
-        # as a unified minimax objective, and report progress to the terminal.
-        
-        stat_parity_gender = find_statistical_parity_score(sex_list, y_test, y_pred_cls)
-        stat_parity_race = find_statistical_parity_score(race_list, y_test, y_pred_cls)
-        # Take the maximum absolute violation as our unified feedback objective
-        worst_parity_violation = max(abs(stat_parity_gender), abs(stat_parity_race))
-        
+        stat_parity = find_statistical_parity_score(sex_list, y_test,y_pred_cls)
         X_test_cpu = X_test.cpu()
         Xtest_dataframe = pd.DataFrame(X_test_cpu.numpy(), columns=column_names_list)
         y_pred_numpy = y_pred.clone().cpu()
@@ -253,15 +228,10 @@ def evaluate(alpha = 100, lr=0.001, cost_false_negatives=5):
             print("specificity: %s" % specificity)
             print("BalanceACC: %s" % bal_acc)
             print("G_mean: %s" % G_mean)
-            print("Gender statistical parity: %s" % stat_parity_gender)
-            print("Race statistical parity: %s" % stat_parity_race)
-            print("Worst-off parity (Max-SPD): %s" % worst_parity_violation)
+            print("statistical parity: %s" % stat_parity)
             print("ate: %s" % ate)
     if fairness_notion == 'stat_parity':
-        # TASK 3 Changes: WORST-OFF OBJECTIVE COUPLING
-        # Pass the unified minimax violation (Max-SPD) back to the BoTorch GP 
-        # surrogate loop to keep the optimization space bounded to a 2D Pareto front.
-        objectives = torch.tensor([[-worst_parity_violation, bal_acc]]) #the two objectives
+        objectives = torch.tensor([[-stat_parity, bal_acc]]) #the two objectives
     elif fairness_notion == 'ate':
         objectives = torch.tensor([[-ate, bal_acc]]) #the two objectives
     return objectives
@@ -295,13 +265,9 @@ for round in range(communication_rounds):
 
     #objectives = evaluate(alpha)
     if round == 0:
-        #Bug A : -> objectives, bal_acc_, fairness_notion_ = evaluate(alpha)
-        #Bug A Fix:
-        objectives = evaluate(alpha)
+        objectives, bal_acc_, fairness_notion_ = evaluate(alpha)
     else:
-        #Bug A : -> objectives, bal_acc_, fairness_notion_ = evaluate(updated_alpha, updated_lr)
-        #Bug A Fix:
-        objectives = evaluate(updated_alpha, updated_lr)
+        objectives, bal_acc_, fairness_notion_ = evaluate(updated_alpha, updated_lr)
     fairness_notion_list.append(objectives[0,0].item())
     bal_acc_list.append(objectives[0,1].item())
     
@@ -373,11 +339,7 @@ with torch.no_grad():
         y_pred = global_model(X_test).squeeze()
         y_pred_cls = y_pred.round()
         sensitivity,specificity,bal_acc,G_mean,FN_rate,FP_rate,Precision,f1_sc, acc, auc = all_metrics(y_test.cpu(),y_pred.cpu())
-        # Final test evaluation across both targets
-        stat_parity_gender = find_statistical_parity_score(sex_list, y_test, y_pred_cls)
-        stat_parity_race = find_statistical_parity_score(race_list, y_test, y_pred_cls)
-        worst_parity_violation = max(abs(stat_parity_gender), abs(stat_parity_race))
-        
+        stat_parity = find_statistical_parity_score(sex_list, y_test,y_pred_cls)
         X_test_cpu = X_test.cpu()
         Xtest_dataframe = pd.DataFrame(X_test_cpu.numpy(), columns=column_names_list)
         y_pred_numpy = y_pred.clone().cpu()
@@ -390,9 +352,7 @@ with torch.no_grad():
         print("specificity: %s" % specificity)
         print("BalanceACC: %s" % bal_acc)
         print("G_mean: %s" % G_mean)
-        print("Final Gender statistical parity: %s" % stat_parity_gender)
-        print("Final Race statistical parity: %s" % stat_parity_race)
-        print("Final Worst-off parity (Max-SPD): %s" % worst_parity_violation)
+        print("statistical parity: %s" % stat_parity)
         print("ate: %s" % ate)
         
 

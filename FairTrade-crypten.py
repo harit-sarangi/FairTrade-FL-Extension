@@ -257,9 +257,13 @@ for round in range(communication_rounds):
 
     #objectives = evaluate(alpha)
     if round == 0:
-        objectives, bal_acc_, fairness_notion_ = evaluate(alpha)
+        # Bug A: objectives, bal_acc_, fairness_notion_ = evaluate(alpha)
+        # Bug A Fix
+        objectives = evaluate(alpha)
     else:
-        objectives, bal_acc_, fairness_notion_ = evaluate(updated_alpha, updated_lr)
+        # Bug A: objectives, bal_acc_, fairness_notion_ = evaluate(updated_alpha, updated_lr)
+        # Bug A Fix:
+        objectives = evaluate(updated_alpha, updated_lr)
     fairness_notion_list.append(objectives[0,0].item())
     bal_acc_list.append(objectives[0,1].item())
     

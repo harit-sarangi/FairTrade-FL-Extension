@@ -802,10 +802,16 @@ def load_dataset(url, dataset_name, num_clients, sensitive_feature, distribution
     if k==0:
         X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        sex_column = X_test[sensitive_feature]
+        # TASK 3 changes: JOINT SENSITIVE ATTRIBUTES LOADING
+        # Extract both sex (gender) and race columns simultaneously from the dataset
+        # to support joint/intersectional multi-attribute fairness optimization.
+        # Extract both sensitive attributes
+        sex_column = X_test['sex']
+        race_column = X_test['race']
         column_names_list = X_temp.columns.tolist()
-        # Convert the pandas Series to a Python list
+        
         sex_list = sex_column.tolist()
+        race_list = race_column.tolist()
         data_dict = {}
         
         for i in range(num_clients):
@@ -814,31 +820,46 @@ def load_dataset(url, dataset_name, num_clients, sensitive_feature, distribution
             else:
                 X_temp, X_client, y_temp, y_client = train_test_split(X_temp, y_temp, test_size=1/(num_clients-i), random_state=42)
             
-            s_client = X_client[sensitive_feature]
-            #compute potential outcomes
-            y_potential_client = find_potential_outcomes(X_client,y_client, sensitive_feature)
-            # Convert to PyTorch tensors
+            # Extract both gender ('sex') and race tensors for clients
+            s_gender_client = X_client['sex']
+            s_race_client = X_client['race']
+            
+            y_potential_client = find_potential_outcomes(X_client, y_client, 'sex')
+            
             X_client = torch.tensor(X_client.values, dtype=torch.float32)
             y_client = torch.tensor(y_client, dtype=torch.float32)
-            s_client = torch.from_numpy(s_client.values).float()
+            
+            s_gender_client = torch.from_numpy(s_gender_client.values).float()
+            s_race_client = torch.from_numpy(s_race_client.values).float()
             y_potential_client = torch.tensor(y_potential_client, dtype=torch.float32)
             
-            # Store the client data in the dictionary
-            data_dict[f"client_{i+1}"] = {"X": X_client, "y": y_client, "s": s_client, "y_pot": y_potential_client}
+            # Pack both client-side attributes into the dictionary
+            data_dict[f"client_{i+1}"] = {
+                "X": X_client, 
+                "y": y_client, 
+                "s_gender": s_gender_client, 
+                "s_race": s_race_client, 
+                "y_pot": y_potential_client
+            }
         ytest_potential = find_potential_outcomes(X_test,y_test, sensitive_feature)
         ytest_potential = torch.tensor(ytest_potential, dtype=torch.float32)
        
         X_test = torch.tensor(X_test.values, dtype=torch.float32)
         y_test = torch.tensor(y_test, dtype=torch.float32)
         
-        return data_dict, X_test, y_test, sex_list, column_names_list,ytest_potential
+        # Updated to return 7 values, including the newly extracted race_list
+        return data_dict, X_test, y_test, sex_list, race_list, column_names_list, ytest_potential
 
+
+# TASK 3 Changes: MULTI-ATTRIBUTE GET_DATA UNPACKING
+# Modified helper to return both gender (s_gender) and race (s_race) sensitive tensors.
 def get_data(client_name, data_dict):
     client_data = data_dict.get(client_name, {})
     X = client_data.get("X")
     y = client_data.get("y")
-    s = client_data.get("s")
+    s_gender = client_data.get("s_gender")
+    s_race = client_data.get("s_race")
     y_pot = client_data.get("y_pot")
-    return X, y, s, y_pot
+    return X, y, s_gender, s_race, y_pot
 
  
