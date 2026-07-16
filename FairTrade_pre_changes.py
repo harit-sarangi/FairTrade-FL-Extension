@@ -46,7 +46,7 @@ from botorch.utils.multi_objective.box_decompositions.non_dominated import (
 )
 # Initialize the argument parser
 parser = argparse.ArgumentParser(description="pass the following arguments: dataset_name, number of clients, fairness notion, number of communication rounds.")
-device = torch.device('mps')
+device = torch.device('cpu')
 '''
 #logistic regression model
 def create_model(input_dim):
