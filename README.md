@@ -1,8 +1,9 @@
 # FairTrade: Achieving Pareto-Optimal Trade-offs Between Balanced Accuracy and Fairness in Federated Learning
 
 This repository is an extended, fully debugged fork of the **FairTrade** framework published in the *Proceedings of the 38th AAAI Conference on Artificial Intelligence (AAAI-24)*. 
+
 As part of Federated Learning Hiwi Challenge, this is my implementation for specific requirements that needed to be staisfied as part of the challenge.
-Co-Author: Harit Sarangi
+## Co-Author: Harit Sarangi
 
 As Federated Learning (FL) environments inherently suffer from class imbalances and statistical heterogeneity across distributed clients, optimizing for standard accuracy can yield misleading fairness evaluations. FairTrade is a multi-objective optimization (MOO) framework leveraging Multi-Objective Bayesian Optimization (MOBO) via BoTorch to dynamically negotiate Pareto-optimal trade-offs between **balanced accuracy** and **fairness**.
 
